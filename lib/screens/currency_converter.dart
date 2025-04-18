@@ -1,4 +1,4 @@
-import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/currency_service.dart';
@@ -33,7 +33,9 @@ class _CurrencyConverterPageState extends State<CurrencyConverterPage> {
         _updateResult();
       });
     } catch (e) {
-      print('Error loading exchange rates: $e');
+      if(kDebugMode){
+        print('Error loading exchange rates: $e');
+      }
     }
   }
 

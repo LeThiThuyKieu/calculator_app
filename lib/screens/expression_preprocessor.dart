@@ -46,7 +46,7 @@ class ExpressionPreprocessor {
     );
     
     // Xử lý rad, deg
-    if (isDeg) {
+          if (isDeg) {
       processed = processed.replaceAllMapped(
         RegExp(r'(sin|cos|tan)\((.*?)\)'),
         (match) {
@@ -55,7 +55,7 @@ class ExpressionPreprocessor {
           return '$func(($arg) * ${math.pi}/180)';
         },
       );
-    } else {
+          } else {
       processed = processed.replaceAllMapped(
         RegExp(r'(sin|cos|tan)\((.*?)\)'),
         (match) {

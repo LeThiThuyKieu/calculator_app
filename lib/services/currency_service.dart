@@ -1,25 +1,32 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../models/currency.dart';
+import '../models/exchange_rate.dart';
 
 class CurrencyService {
-  static const String baseUrl = 'https://api.exchangerate-api.com/v4/latest/USD';
-  
-  // Singleton pattern
+  static const String url = 'https://v6.exchangerate-api.com/v6/08b7273b010d4b690a799708/latest/USD';
   static final CurrencyService _instance = CurrencyService._internal();
   
   factory CurrencyService() {
     return _instance;
   }
   
-  CurrencyService._internal();
+  CurrencyService._internal() {
+    _initCurrencies();
+  }
 
-  // Lưu trữ tỉ giá để tránh gọi API nhiều lần
-  Map<String, double> _exchangeRates = {};
-  DateTime? _lastUpdated;
+  // Lưu trữ dữ liệu
+  ExchangeRate? _exchangeRate;
+  List<Currency> _currencies = [];
 
-  // Getter cho tỉ giá
-  Map<String, double> get exchangeRates => _exchangeRates;
-  DateTime? get lastUpdated => _lastUpdated;
+  // Getters
+  ExchangeRate? get exchangeRate => _exchangeRate;
+  List<Currency> get currencies => _currencies;
+  DateTime? get lastUpdated => _exchangeRate?.lastUpdated;
+
+  // Hỗ trợ với các hàm cũ
+  Map<String, double> get exchangeRates => _exchangeRate?.rates ?? {};
 
   // Danh sách tiền tệ hỗ trợ
   static final Map<String, String> supportedCurrencies = {
@@ -32,16 +39,27 @@ class CurrencyService {
     "CNY": "Nhân dân tệ",
   };
 
-  // Fetch tỉ giá từ API
-  Future<Map<String, double>> fetchExchangeRates() async {
-    try {
-      final response = await http.get(Uri.parse(baseUrl));
+  // Khởi tạo danh sách tiền tệ
+  void _initCurrencies() {
+    _currencies = supportedCurrencies.entries
+        .map((entry) => Currency(code: entry.key, name: entry.value))
+        .toList();
+  }
 
+  // Lấy tỉ giá từ API
+  Future<ExchangeRate> fetchExchangeRates() async {
+    try {
+      final response = await http.get(Uri.parse(url));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        _exchangeRates = Map<String, double>.from(data['rates']);
-        _lastUpdated = DateTime.now();
-        return _exchangeRates;
+        _exchangeRate = ExchangeRate(
+          baseCurrency: "USD",
+          rates: (data['conversion_rates'] as Map<String, dynamic>).map(
+                (key, value) => MapEntry(key, (value as num).toDouble()),
+          ),
+          lastUpdated: DateTime.now(),
+        );
+        return _exchangeRate!;
       } else {
         throw Exception('Failed to load exchange rates');
       }
@@ -51,13 +69,9 @@ class CurrencyService {
   }
 
   // Convert tiền tệ
-  double convertCurrency(
-    String amount,
-    String fromCurrency,
-    String toCurrency,
-  ) {
-    if (_exchangeRates.isEmpty) return 0;
-    
+  double convertCurrency(String amount,String fromCurrency,String toCurrency,) {
+    if (_exchangeRate == null) return 0;
+
     double amountDouble;
     try {
       amountDouble = double.parse(amount);
@@ -65,20 +79,23 @@ class CurrencyService {
       return 0;
     }
     
-    // Chuyển đổi về USD trước
-    double inUSD = fromCurrency == "USD" 
-        ? amountDouble 
-        : amountDouble / (_exchangeRates[fromCurrency] ?? 1);
-    
-    // Chuyển từ USD sang tiền tệ đích
-    return inUSD * (_exchangeRates[toCurrency] ?? 1);
+    return _exchangeRate!.convert(amountDouble, fromCurrency, toCurrency);
   }
 
-  // Kiểm tra xem có cần cập nhật tỉ giá không (ví dụ: mỗi 1 giờ)
+  // Lấy tên của một loại tiền tệ
+  String getCurrencyName(String code) {
+    final currency = _currencies.firstWhere(
+      (c) => c.code == code,
+      orElse: () => Currency(code: code, name: code),
+    );
+    return currency.name;
+  }
+
+  // Kiểm tra xem có cần cập nhật tỉ giá không
   bool shouldUpdate() {
-    if (_lastUpdated == null) return true;
+    if (_exchangeRate == null) return true;
     
-    final difference = DateTime.now().difference(_lastUpdated!);
+    final difference = DateTime.now().difference(_exchangeRate!.lastUpdated);
     return difference.inHours >= 1;
   }
 } 

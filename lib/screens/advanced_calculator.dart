@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:math_expressions/math_expressions.dart';
 
+import 'calculator_history.dart';
 import 'expression_preprocessor.dart';
 
 class AdvancedCalculatorPage extends StatefulWidget {
@@ -37,6 +38,7 @@ class _AdvancedCalculatorPageState extends State<AdvancedCalculatorPage> {
           break;
         case '=':
           _calculateResult();
+          CalculationHistory.addCalculation(currentInput, result);
           break;
         case '+/_':
           if (currentInput.isEmpty || currentInput == '-') {
@@ -252,7 +254,7 @@ class _AdvancedCalculatorPageState extends State<AdvancedCalculatorPage> {
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: _isFunction(label)
                                       ? Colors.grey.shade200
-                                      : ['AC', '⌫', '+/_', '÷', '×', '-', '+', '=', '+/_'].contains(label)
+                                      : ['AC', '⌫', '+/_', '÷', '×', '-', '+', '='].contains(label)
                                           ? label == '=' 
                                               ? Colors.blue.shade800
                                               : Colors.blue.shade100

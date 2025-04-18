@@ -394,16 +394,6 @@ class _CalculatorPageState extends State<CalculatorPage> {
                         foregroundColor:
                         e == "="
                             ? Colors.white
-                            : [
-                          "AC",
-                          "⌫",
-                          "+/_",
-                          "÷",
-                          "×",
-                          "-",
-                          "+",
-                        ].contains(e)
-                            ? const Color(0xFF5F6CB2)
                             : Colors.black,
                       ),
                       child:
