@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'dart:math' as math;
+import 'package:math_expressions/math_expressions.dart';
+import 'expression_preprocessor.dart';
 
 import 'calculator_history.dart';
 import 'advanced_calculator.dart';
@@ -50,91 +53,114 @@ class CalculatorPage extends StatefulWidget {
 }
 
 class _CalculatorPageState extends State<CalculatorPage> {
-  String expressionDisplayText = "";
-  String displayText = "0";
-  List<String> expression = [];
-  String currentNumber = "";
-  bool justCalculated = false;
+  String currentInput = "";
+  String result = "0";
 
-  void _updateDisplay() {
-    expressionDisplayText =
-        expression.join(" ") +
-            (currentNumber.isNotEmpty ? " $currentNumber" : "");
-    expressionDisplayText = expressionDisplayText.trim();
-    if (expressionDisplayText.isEmpty) expressionDisplayText = "";
+  void _onButtonPressed(String value) {
+    setState(() {
+      switch (value) {
+        case 'AC':
+          currentInput = '';
+          result = '0';
+          break;
+        case '⌫':
+          if (currentInput.isNotEmpty) {
+            currentInput = currentInput.substring(0, currentInput.length - 1);
+          }
+          break;
+        case '=':
+          _calculateResult();
+          CalculationHistory.addCalculation(currentInput, result);
+          break;
+        case '+/_':
+          if (currentInput.isEmpty || currentInput == '-') {
+            return;
+          }
+
+          RegExp numberRegex = RegExp(r'-?\d+\.?\d*$');
+          Match? match = numberRegex.firstMatch(currentInput);
+          
+          if (match != null) {
+            String number = match.group(0)!;
+            int startIndex = match.start;
+            
+            bool hasOperatorBefore = startIndex > 0 && 
+                ['+', '-', '×', '÷', '^'].contains(currentInput[startIndex - 1]);
+
+            if (number.startsWith('-')) {
+              currentInput = currentInput.substring(0, startIndex) + number.substring(1);
+            } else {
+              if (hasOperatorBefore) {
+                currentInput = currentInput.substring(0, startIndex) + '(-' + number + ')';
+              } else {
+                currentInput = currentInput.substring(0, startIndex) + '-' + number;
+              }
+            }
+          } else {
+            if (currentInput.startsWith('-')) {
+              currentInput = currentInput.substring(1);
+            } else {
+              currentInput = '-' + currentInput;
+            }
+          }
+          break;
+        case '%':
+          // Thêm dấu % vào biểu thức, sẽ được xử lý trong ExpressionPreprocessor
+          currentInput += '%';
+          break;
+        case ',':
+          // Thêm dấu . (thập phân) vào biểu thức
+          currentInput += '.';
+          break;
+        default:
+          if (['+', '-', '×', '÷'].contains(value)) {
+            // Thêm toán tử
+            currentInput += value;
+          } else {
+            // Thêm số
+            currentInput += value;
+          }
+      }
+    });
   }
 
-  void _onPressed(String value) {
-    setState(() {
-      if (value == "AC") {
-        expression.clear();
-        currentNumber = "";
-        displayText = "0";
-        expressionDisplayText = "";
-      } else if (value == "=") {
-        if (currentNumber.isNotEmpty) {
-          expression.add(currentNumber);
-        }
-
-        // Ghi lại biểu thức trước khi tính toán
-        expressionDisplayText = expression.join(" ");
-
-        double result = _evaluateExpression(expression);
-
-        displayText = formatNumber(formatSmart(result));
-        expression = [formatSmart(result)];
-        currentNumber = "";
-        justCalculated = true;
-
-        CalculationHistory.addCalculation(expressionDisplayText, displayText);
-      } else if (_isOperator(value)) {
-        if (currentNumber.isNotEmpty) {
-          expression.add(currentNumber);
-          currentNumber = '';
-        }
-
-        if (expression.isNotEmpty && _isOperator(expression.last)) {
-          expression.removeLast();
-        }
-        expression.add(value);
-        justCalculated = false;
-      } else if (value == "+/_") {
-        if (currentNumber.isNotEmpty) {
-          if (currentNumber.startsWith("-")) {
-            currentNumber = currentNumber.substring(1);
-          } else {
-            currentNumber = "-$currentNumber";
-          }
-        }
-      } else if (value == ",") {
-        if (!currentNumber.contains(".")) {
-          currentNumber += ".";
-        }
-      } else if (value == "%") {
-        if (currentNumber.isNotEmpty) {
-          double num = double.tryParse(currentNumber) ?? 0;
-          currentNumber = (num / 100).toString();
-        }
-      } else if (value == "⌫") {
-        if (currentNumber.isNotEmpty) {
-          currentNumber = currentNumber.substring(0, currentNumber.length - 1);
-        } else if (expression.isNotEmpty) {
-          expression.removeLast();
-        }
+  void _calculateResult() {
+    try {
+      String expression = ExpressionPreprocessor.preprocess(currentInput, true);
+      
+      // Create parser and context
+      Parser p = Parser();
+      ContextModel cm = ContextModel();
+      
+      // Add custom functions to context
+      cm.bindVariable(Variable('e'), Number(math.e));
+      cm.bindVariable(Variable('pi'), Number(math.pi));
+      
+      // Parse and evaluate
+      Expression exp = p.parse(expression);
+      double eval = exp.evaluate(EvaluationType.REAL, cm);
+      
+      // Format result
+      if (eval.isInfinite) {
+        result = "∞";
+      } else if (eval.isNaN) {
+        result = "Lỗi";
       } else {
-        // Nếu vừa mới tính xong và nhấn số => reset biểu thức
-        if (justCalculated && _isNumber(value)) {
-          expression.clear();
-          displayText = "0";
-          currentNumber = value;
-          justCalculated = false;
+        // Format to remove trailing zeros and handle very small/large numbers
+        if (eval.abs() < 1e-10) {
+          result = "0";
+        } else if (eval.abs() > 1e10) {
+          result = eval.toStringAsExponential(6);
         } else {
-          currentNumber += value;
+          String formatted = eval.toStringAsFixed(10);
+          // Loại bỏ các số 0 thừa sau dấu thập phân
+          formatted = formatted.replaceAll(RegExp(r'\.?0+$'), '');
+          result = formatted;
         }
       }
-
-      _updateDisplay();
-    });
+    } catch (e) {
+      result = "Lỗi";
+    }
   }
 
   bool _isOperator(String value) {
@@ -207,7 +233,6 @@ class _CalculatorPageState extends State<CalculatorPage> {
   String formatNumber(String numberStr) {
     try {
       double number = double.parse(numberStr);
-
       final formatter = NumberFormat("#,##0.#######", "vi_VN");
       return formatter.format(number);
     } catch (e) {
@@ -258,7 +283,7 @@ class _CalculatorPageState extends State<CalculatorPage> {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text(
-                          formatNumber(expressionDisplayText),
+                          formatNumber(currentInput),
                           style: const TextStyle(
                             fontSize: 26,
                             color: Colors.grey,
@@ -266,7 +291,7 @@ class _CalculatorPageState extends State<CalculatorPage> {
                         ),
                         const SizedBox(height: 10),
                         Text(
-                          formatNumber(displayText),
+                          formatNumber(result),
                           style: const TextStyle(
                             fontSize: 48,
                             fontWeight: FontWeight.bold,
@@ -298,13 +323,10 @@ class _CalculatorPageState extends State<CalculatorPage> {
                       // Nếu người dùng đã chọn một dòng từ lịch sử
                       if (selectedCalculation != null) {
                         setState(() {
-                          expressionDisplayText =
+                          currentInput =
                           selectedCalculation["expression"];
-                          displayText = selectedCalculation["result"];
+                          result = selectedCalculation["result"];
                           // Optionally: cập nhật lại biến để xử lý tiếp
-                          currentNumber = "";
-                          expression = selectedCalculation["expression"]
-                              .split(" ");
                         });
                       }
                     },
@@ -371,7 +393,7 @@ class _CalculatorPageState extends State<CalculatorPage> {
                   return Padding(
                     padding: const EdgeInsets.all(8.0),
                     child: ElevatedButton(
-                      onPressed: () => _onPressed(e),
+                      onPressed: () => _onButtonPressed(e),
                       style: ElevatedButton.styleFrom(
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(30),

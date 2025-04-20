@@ -109,49 +109,70 @@ class _CurrencyConverterPageState extends State<CurrencyConverterPage> {
   void _showCurrencyPicker(bool isFrom) {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
-        return Container(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Chọn loại tiền tệ',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: ListView.builder(
-                  itemCount: CurrencyService.supportedCurrencies.length,
-                  itemBuilder: (context, index) {
-                    String code = CurrencyService.supportedCurrencies.keys.elementAt(index);
-                    String name = CurrencyService.supportedCurrencies[code]!;
-                    return ListTile(
-                      title: Text(name),
-                      subtitle: Text(code),
-                      onTap: () {
-                        setState(() {
-                          if (isFrom) {
-                            selectedFromCurrency = code;
-                          } else {
-                            selectedToCurrency = code;
-                          }
-                          _updateResult();
-                        });
-                        Navigator.pop(context);
+        // Sử dụng DraggableScrollableSheet để có thể kéo lên xuống
+        return DraggableScrollableSheet(
+          initialChildSize: 0.6, // Chiếm 60% màn hình ban đầu
+          minChildSize: 0.3, // Tối thiểu 30%
+          maxChildSize: 0.9, // Tối đa 90%
+          expand: false,
+          builder: (context, scrollController) {
+            return Container(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Thanh kéo
+                  Container(
+                    height: 4,
+                    width: 50,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  const Text(
+                    'Chọn loại tiền tệ',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Expanded(
+                    child: ListView.builder(
+                      controller: scrollController,
+                      itemCount: CurrencyService.supportedCurrencies.length,
+                      itemBuilder: (context, index) {
+                        String code = CurrencyService.supportedCurrencies.keys.elementAt(index);
+                        String name = CurrencyService.supportedCurrencies[code]!;
+                        return ListTile(
+                          title: Text(name),
+                          subtitle: Text(code),
+                          onTap: () {
+                            setState(() {
+                              if (isFrom) {
+                                selectedFromCurrency = code;
+                              } else {
+                                selectedToCurrency = code;
+                              }
+                              _updateResult();
+                            });
+                            Navigator.pop(context);
+                          },
+                        );
                       },
-                    );
-                  },
-                ),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            );
+          }
         );
       },
     );
